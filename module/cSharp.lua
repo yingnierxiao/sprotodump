@@ -283,7 +283,7 @@ end
 
 
 
-local function dump_class(class_info, stream, deep)
+local function dump_class(class_info, stream, deep ,protocolClass,mainClass)
   local class_name = class_info.class_name
   local sproto_type = class_info.sproto_type
   local internal_class = class_info.internal_class
@@ -299,7 +299,7 @@ local function dump_class(class_info, stream, deep)
     -- internal class
     stream:write("", deep)
     for i=1,#internal_class do
-      dump_class(internal_class[i], stream, deep)
+      dump_class(internal_class[i], stream, deep ,protocolClass)
     end
 
     -- property
@@ -357,6 +357,12 @@ local function dump_class(class_info, stream, deep)
       end
       stream:write("return base.serialize.close ();", deep+1);
     stream:write("}", deep)
+    
+    --TODO add by zj
+    stream:write("public override int Tag() {", deep)
+      stream:write(string.format("return %s;",mainClass or -1), deep+1)
+
+    stream:write("}\n\n", deep)
 
 
     deep = deep - 1;
@@ -365,10 +371,24 @@ local function dump_class(class_info, stream, deep)
   else
     stream:write("public class "..class_name.." {", deep)
 
+    local mainClass = -1
+
+    for k,v in pairs(protocolClass.classes) do
+        if class_name ==  v.value.name then
+          print(deep ,class_name , sproto_type, v.value.name,v.value.tag)
+
+          stream:write(string.format("public static int Tag = %s;",v.value.tag), deep+1)
+
+          mainClass = v.value.tag
+        end
+     end
+
+
+
     -- internal class
     stream:write("", deep)
     for i=1,#internal_class do
-      dump_class(internal_class[i], stream, deep+1)
+      dump_class(internal_class[i], stream, deep+1 ,protocolClass , mainClass)
     end
     stream:write("}\n\n", deep)
   end
@@ -397,16 +417,17 @@ local function constructor_protocol(class, package, stream, deep)
       local response_type = class_info.response
       local stag = name..".Tag"
 
-      stream:write("Protocol.SetProtocol<"..name.."> ("..stag..");", deep)
+      --TODO remove by zj
+      -- stream:write("Protocol.SetProtocol<"..name.."> ("..stag..");", deep)
       
       if request_type then
         request_type = type_namespace.."."..request_type
-        stream:write("Protocol.SetRequest<"..request_type.."> ("..stag..");",deep)
+        stream:write("Protocol.SetRequest<"..request_type.."> ("..type_namespace.."."..stag..");",deep)
       end
 
       if response_type then
         response_type = type_namespace.."."..response_type
-        stream:write("Protocol.SetResponse<"..response_type.."> ("..stag..");", deep)
+        stream:write("Protocol.SetResponse<"..response_type.."> ("..type_namespace.."."..stag..");", deep)
       end
       stream:write()
     end
@@ -432,7 +453,7 @@ local function dump_protocol_class(class, stream, deep)
 end
 
 
-
+--class= {name=string,value={tag=int}}
 local function parse_protocol(class, stream, package)
   if not class or #class == 0 then return end
 
@@ -441,14 +462,15 @@ local function parse_protocol(class, stream, package)
     stream:write("public static  "..class_name.." Instance = new "..class_name.."();", 1)
     constructor_protocol(class, package, stream, 1)
 
-    for i,v in ipairs(class.classes) do
-      dump_protocol_class(v, stream, 1)
-    end
+    -- TODO remove by zj
+    -- for i,v in ipairs(class.classes) do
+    --   dump_protocol_class(v, stream, 1)
+    -- end
   stream:write("}")
 end
 
 
-local function parse_type(class, stream, package)
+local function parse_type(class, stream, package,protocolClass)
   if not class or #class == 0 then return end
 
   local namespace = _gen_sprototype_namespace(package)
@@ -456,7 +478,7 @@ local function parse_type(class, stream, package)
 
   for i=1,#class do
     local class_info = class[i]
-    dump_class(class_info, stream, 1)
+    dump_class(class_info, stream, 1, protocolClass)
   end
 
   stream:write("}\n\n")
@@ -511,7 +533,7 @@ local function parse_ast2all(ast, package, name)
   stream:write([[// source: ]]..(name or "input").."\n")
   stream:write(using)
 
-  parse_type(type_class, stream, package)
+  parse_type(type_class, stream, package,protocol_class)
   parse_protocol(protocol_class, stream, package)
 
   return stream:dump()  
