@@ -378,6 +378,7 @@ local function dump_class(class_info, stream, deep ,protocolClass,mainClass)
           print(deep ,class_name , sproto_type, v.value.name,v.value.tag)
 
           stream:write(string.format("public static int Tag = %s;",v.value.tag), deep+1)
+          stream:write(string.format("public const int TagName = \"%s\";",v.value.tag), deep+1)
 
           mainClass = v.value.tag
         end
